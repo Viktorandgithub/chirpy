@@ -3,10 +3,11 @@ package database
 import (
 	"encoding/json"
 	"errors"
-	"log"
 	"os"
 	"sync"
 )
+
+var ErrNotExist = errors.New("resource does not exist")
 
 type DB struct {
 	path string
@@ -32,16 +33,12 @@ func NewDB(path string) (*DB, error) {
 }
 
 func (db *DB) CreateChirp(body string) (Chirp, error) {
-
 	dbStructure, err := db.loadDB()
 	if err != nil {
 		return Chirp{}, err
 	}
+
 	id := len(dbStructure.Chirps) + 1
-	if len(dbStructure.Chirps) == 0 {
-		id = 1
-	}
-	
 	chirp := Chirp{
 		ID:   id,
 		Body: body,
@@ -70,6 +67,20 @@ func (db *DB) GetChirps() ([]Chirp, error) {
 	return chirps, nil
 }
 
+func (db *DB) GetChirp(id int) (Chirp, error) {
+	dbStructure, err := db.loadDB()
+	if err != nil {
+		return Chirp{}, err
+	}
+
+	chirp, ok := dbStructure.Chirps[id]
+	if !ok {
+		return Chirp{}, ErrNotExist
+	}
+
+	return chirp, nil
+}
+
 func (db *DB) createDB() error {
 	dbStructure := DBStructure{
 		Chirps: map[int]Chirp{},
@@ -88,6 +99,7 @@ func (db *DB) ensureDB() error {
 func (db *DB) loadDB() (DBStructure, error) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
+
 	dbStructure := DBStructure{}
 	dat, err := os.ReadFile(db.path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -95,7 +107,6 @@ func (db *DB) loadDB() (DBStructure, error) {
 	}
 	err = json.Unmarshal(dat, &dbStructure)
 	if err != nil {
-		log.Println(dbStructure, err)
 		return dbStructure, err
 	}
 
